@@ -14,14 +14,20 @@ def create_app(config_class=Config):
     bcrypt.init_app(app)
 
     login_manager.login_view = "auth.login"
+    # Shown as a flash message if someone hits a @login_required route
+    # without being logged in, before they're bounced to the login page.
+    login_manager.login_message = "Please log in to continue."
+    login_manager.login_message_category = "info"
 
     # Import models so they register with SQLAlchemy before any
     # migration or query touches the database.
     from app import models  # noqa: F401
 
-    # Blueprints are registered here as each is built in later steps.
-    # from app.routes.auth import auth_bp
-    # app.register_blueprint(auth_bp)
+    from app.routes.auth import auth_bp
+    from app.routes.main import main_bp
+
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(main_bp)
 
     @app.route("/health")
     def health_check():

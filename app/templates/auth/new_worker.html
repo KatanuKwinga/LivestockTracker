@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Add a worker{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>Add a worker account</h1>
+  <p class="muted">Share the password below with them and ask them to change it after their first login (password-change isn't built yet — coming in a later step).</p>
+
+  <form method="POST" novalidate>
+    {{ form.hidden_tag() }}
+
+    <label for="{{ form.name.id }}">{{ form.name.label.text }}</label>
+    {{ form.name(id=form.name.id) }}
+    {% if form.name.errors %}<ul class="errors">{% for e in form.name.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+    <label for="{{ form.email.id }}">{{ form.email.label.text }}</label>
+    {{ form.email(id=form.email.id) }}
+    {% if form.email.errors %}<ul class="errors">{% for e in form.email.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+    <label for="{{ form.phone.id }}">{{ form.phone.label.text }}</label>
+    {{ form.phone(id=form.phone.id) }}
+
+    <label for="{{ form.password.id }}">{{ form.password.label.text }}</label>
+    {{ form.password(id=form.password.id) }}
+    {% if form.password.errors %}<ul class="errors">{% for e in form.password.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+    <label for="{{ form.confirm_password.id }}">{{ form.confirm_password.label.text }}</label>
+    {{ form.confirm_password(id=form.confirm_password.id) }}
+    {% if form.confirm_password.errors %}<ul class="errors">{% for e in form.confirm_password.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+    {{ form.submit() }}
+  </form>
+</div>
+{% endblock %}

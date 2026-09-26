@@ -1,0 +1,129 @@
+"""Authentication routes: farmer self-registration, login/logout, and a
+farmer-only route for creating worker accounts."""
+
+from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy.exc import IntegrityError
+
+from app.extensions import bcrypt, db
+from app.forms import FarmerRegistrationForm, LoginForm, WorkerCreationForm
+from app.models import Farmer, User, Worker
+
+auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+
+@auth_bp.route("/register", methods=["GET", "POST"])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for("main.dashboard"))
+
+    form = FarmerRegistrationForm()
+    if form.validate_on_submit():
+        # We hash the password with bcrypt before it ever touches the database 
+        hashed_pw = bcrypt.generate_password_hash(form.password.data).decode("utf-8")
+
+        user = User(
+            name=form.name.data.strip(),
+            email=form.email.data.lower().strip(),
+            password_hash=hashed_pw,
+            phone=form.phone.data.strip() if form.phone.data else None,
+        )
+        db.session.add(user)
+        # flush() sends the INSERT to the database and gets user.id back, without committing the transaction yet, we need that id to build the Farmer row below
+        try:
+            db.session.flush()
+
+            farmer = Farmer(user_id=user.id)
+            db.session.add(farmer)
+            db.session.commit()
+        except IntegrityError:
+            # Validate_email() above already checks for a duplicate before we get here, but that check and this
+            # INSERT aren't atomic — two requests submitted at nearly the
+            # same instant (a double-click, or a resubmitted form) can
+            # both pass validation before either has committed, and the
+            # database's own UNIQUE constraint on email is what actually
+            # catches the second one. Without this except block that
+            # shows up to the user as a raw server error instead of a
+            # normal "try again" message.
+            db.session.rollback()
+            flash("An account with this email already exists.", "danger")
+            return render_template("auth/register.html", form=form)
+
+        flash("Account created — please log in.", "success")
+        return redirect(url_for("auth.login"))
+
+    return render_template("auth/register.html", form=form)
+
+
+@auth_bp.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("main.dashboard"))
+
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data.lower().strip()).first()
+
+        # bcrypt.check_password_hash re-hashes the submitted password with the same salt stored in password_hash and compares the results.
+       
+        if user and bcrypt.check_password_hash(user.password_hash, form.password.data):
+            # A User row is either a farmer or a worker.
+            # We log in whichever account object actually exists
+            account = user.farmer or user.worker
+            login_user(account)
+            flash(f"Welcome back, {account.name}.", "success")
+
+            next_page = request.args.get("next")
+            return redirect(next_page or url_for("main.dashboard"))
+
+        # Deliberately vague due to attackers
+        flash("Invalid email or password.", "danger")
+
+    return render_template("auth/login.html", form=form)
+
+
+@auth_bp.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    flash("You have been logged out.", "info")
+    return redirect(url_for("auth.login"))
+
+
+@auth_bp.route("/workers/new", methods=["GET", "POST"])
+@login_required
+def new_worker():
+    # Role-based access control, Only a Farmer account (not a Worker) may reach this page at all.
+    if not isinstance(current_user, Farmer):
+        flash("Only a farmer account can add workers.", "danger")
+        return redirect(url_for("main.dashboard"))
+
+    form = WorkerCreationForm()
+    if form.validate_on_submit():
+        hashed_pw = bcrypt.generate_password_hash(form.password.data).decode("utf-8")
+
+        user = User(
+            name=form.name.data.strip(),
+            email=form.email.data.lower().strip(),
+            password_hash=hashed_pw,
+            phone=form.phone.data.strip() if form.phone.data else None,
+        )
+        db.session.add(user)
+        try:
+            db.session.flush()
+
+            # The new worker is hard-linked to current_user.farmer_i
+            # From the moment it's created it can only ever belong to this farm.
+            worker = Worker(user_id=user.id, farmer_id=current_user.farmer_id)
+            db.session.add(worker)
+            db.session.commit()
+        except IntegrityError:
+            # Same race condition as in register() above 
+            db.session.rollback()
+            flash("An account with this email already exists.", "danger")
+            return render_template("auth/new_worker.html", form=form)
+
+        flash(f"Worker account created for {user.name}.", "success")
+        return redirect(url_for("main.dashboard"))
+
+    return render_template("auth/new_worker.html", form=form)

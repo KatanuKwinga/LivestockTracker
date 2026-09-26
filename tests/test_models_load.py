@@ -4,15 +4,16 @@ It doesn't test business logic yet (that comes in later steps) — it only
 proves the models import cleanly and every table can actually be created,
 which is where circular-FK and typo bugs show up immediately instead of
 three steps from now when they're harder to trace.
+
+The `app` fixture used below comes from tests/conftest.py, which builds
+the Flask app against an in-memory SQLite database from the start (rather
+than overriding SQLALCHEMY_DATABASE_URI after create_app() runs, which
+looks like it works but doesn't — see that file's docstring for why).
 """
-from app import create_app
 from app.extensions import db
 
 
-def test_app_creates_and_tables_build():
-    app = create_app()
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-
+def test_app_creates_and_tables_build(app):
     with app.app_context():
         db.create_all()
         from app.models import (
