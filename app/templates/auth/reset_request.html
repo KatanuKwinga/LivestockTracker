@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Reset your password{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>Reset your password</h1>
+  <p class="muted">Enter the email on your account and we'll send you a link to set a new password.</p>
+
+  <form method="POST" novalidate>
+    {{ form.hidden_tag() }}
+
+    <label for="{{ form.email.id }}">{{ form.email.label.text }}</label>
+    {{ form.email(id=form.email.id) }}
+    {% if form.email.errors %}<ul class="errors">{% for e in form.email.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+    {{ form.submit() }}
+  </form>
+
+  <p class="muted"><a href="{{ url_for('auth.login') }}">Back to log in</a></p>
+</div>
+{% endblock %}
