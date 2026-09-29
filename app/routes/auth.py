@@ -1,15 +1,45 @@
 """Authentication routes: farmer self-registration, login/logout, and a
 farmer-only route for creating worker accounts."""
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
+from flask_mail import Message
 from sqlalchemy.exc import IntegrityError
 
-from app.extensions import bcrypt, db
-from app.forms import FarmerRegistrationForm, LoginForm, WorkerCreationForm
+from app.extensions import bcrypt, db, mail
+from app.forms import FarmerRegistrationForm, LoginForm, RequestResetForm, ResetPasswordForm, WorkerCreationForm
 from app.models import Farmer, User, Worker
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+
+def send_reset_email(user):
+    """Build and send the actual password-reset email.
+
+    Split out from the route below so the route stays focused on request
+    handling, and so tests can call this directly if they ever want to
+    check the email content without going through a full HTTP request.
+    """
+    token = user.get_reset_token()
+    reset_url = url_for("auth.reset_password", token=token, _external=True)
+    # _external=True is what makes this a full https://... link instead of
+    # just a path — essential here since the link is going into an email,
+    # read outside the context of our own site.
+
+    message = Message(
+        subject="Livestock Tracker — Password Reset Request",
+        recipients=[user.email],
+        body=(
+            f"Hi {user.name},\n\n"
+            "Someone (hopefully you) requested a password reset for your "
+            "Livestock Tracker account. Click the link below to choose a "
+            "new password:\n\n"
+            f"{reset_url}\n\n"
+            "This link expires in 30 minutes. If you didn't request this, "
+            "you can safely ignore this email — your password won't change."
+        ),
+    )
+    mail.send(message)
 
 
 @auth_bp.route("/register", methods=["GET", "POST"])
@@ -127,3 +157,63 @@ def new_worker():
         return redirect(url_for("main.dashboard"))
 
     return render_template("auth/new_worker.html", form=form)
+
+
+@auth_bp.route("/reset-password", methods=["GET", "POST"])
+def reset_request():
+    """Step 1: farmer or worker types in their email, we (maybe) email
+    them a reset link."""
+    if current_user.is_authenticated:
+        return redirect(url_for("main.dashboard"))
+
+    form = RequestResetForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data.lower().strip()).first()
+
+        # Deliberately send the *same* flash message whether or not the
+        # account exists, and only actually email when it does. If we
+        # showed a different message for "no account with that email",
+        # anyone could use this form to check which addresses are
+        # registered — the same enumeration risk called out in login()'s
+        # "Invalid email or password" comment.
+        if user:
+            try:
+                send_reset_email(user)
+            except Exception:
+                # A real SMTP failure (bad credentials, network issue,
+                # Gmail rate limit) shouldn't crash the request or leak
+                # server internals to the user — log it for us to see,
+                # show the same generic message either way.
+                current_app.logger.exception("Failed to send password reset email")
+
+        flash(
+            "If an account with that email exists, we've sent instructions to reset your password.",
+            "info",
+        )
+        return redirect(url_for("auth.login"))
+
+    return render_template("auth/reset_request.html", form=form)
+
+
+@auth_bp.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    """Step 2: the link from the email lands here. verify_reset_token
+    does the heavy lifting — checking the signature and the 30-minute
+    expiry — so this route only has to react to whether that came back
+    with a real user or None."""
+    if current_user.is_authenticated:
+        return redirect(url_for("main.dashboard"))
+
+    user = User.verify_reset_token(token)
+    if user is None:
+        flash("That password reset link is invalid or has expired.", "danger")
+        return redirect(url_for("auth.reset_request"))
+
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user.password_hash = bcrypt.generate_password_hash(form.password.data).decode("utf-8")
+        db.session.commit()
+        flash("Your password has been updated — please log in.", "success")
+        return redirect(url_for("auth.login"))
+
+    return render_template("auth/reset_password.html", form=form)

@@ -1,7 +1,7 @@
 from flask import Flask
 
 from app.config import Config
-from app.extensions import db, migrate, login_manager, bcrypt
+from app.extensions import db, migrate, login_manager, bcrypt, mail
 
 
 def create_app(config_class=Config):
@@ -12,6 +12,7 @@ def create_app(config_class=Config):
     migrate.init_app(app, db)
     login_manager.init_app(app)
     bcrypt.init_app(app)
+    mail.init_app(app)
 
     login_manager.login_view = "auth.login"
     # Shown as a flash message if someone hits a @login_required route

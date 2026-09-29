@@ -33,6 +33,14 @@ class TestConfig(Config):
     # page just to test the view logic.
     WTF_CSRF_ENABLED = False
     SECRET_KEY = "test-secret-key"
+    # Flask-Mail's "suppress send" mode: mail.send() runs normally (so a
+    # real bug in message-building still raises) but the actual SMTP
+    # connection is skipped — tests never need real Gmail credentials or
+    # network access, and never send a real email to anyone.
+    MAIL_SUPPRESS_SEND = True
+    # Real config reads the sender from .env; tests have no .env, and
+    # Flask-Mail refuses to build a message with no sender at all.
+    MAIL_DEFAULT_SENDER = "noreply@livestock-tracker.test"
 
 
 @pytest.fixture
