@@ -1,0 +1,46 @@
+{
+  "model_name": "random_forest",
+  "threshold": 0.28876632743113767,
+  "horizon_days": 14,
+  "feature_columns": [
+    "species",
+    "gender",
+    "age_days",
+    "weight_change_14d_pct",
+    "weight_change_30d_pct",
+    "weight_slope_30d_pct",
+    "weight_vs_trend_pct",
+    "days_since_last_weight",
+    "n_weights_90d",
+    "illnesses_90d",
+    "illnesses_365d",
+    "days_since_last_illness",
+    "vaccinated_180d",
+    "rainy_season"
+  ],
+  "validation_roc_auc_by_model": {
+    "logistic_regression": 0.7559,
+    "random_forest": 0.7834,
+    "gradient_boosting": 0.7694
+  },
+  "test_metrics": {
+    "roc_auc": 0.8208,
+    "pr_auc": 0.4531,
+    "precision": 0.6774,
+    "recall": 0.35,
+    "f1": 0.4615,
+    "confusion_matrix": {
+      "tn": 1019,
+      "fp": 10,
+      "fn": 39,
+      "tp": 21
+    },
+    "positive_rate": 0.0551,
+    "n_rows": 1089
+  },
+  "data_source": "database",
+  "n_animals": 300,
+  "n_snapshots": 5494,
+  "trained_at": "2026-09-29T06:34:00",
+  "sklearn_version": "1.5.2"
+}
