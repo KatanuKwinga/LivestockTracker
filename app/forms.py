@@ -51,3 +51,24 @@ class LoginForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
     password = PasswordField("Password", validators=[DataRequired()])
     submit = SubmitField("Log in")
+
+
+class RequestResetForm(FlaskForm):
+    """Step 1 of password reset: just ask for the email to send the
+    reset link to. Deliberately has no validate_email() check for an
+    existing account — see the comment in auth.py's reset_request route
+    for why we don't want to reveal that here."""
+
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    submit = SubmitField("Send reset link")
+
+
+class ResetPasswordForm(FlaskForm):
+    """Step 2: shown after clicking a valid, unexpired reset link."""
+
+    password = PasswordField("New password", validators=[DataRequired(), Length(min=8, message="Use at least 8 characters.")])
+    confirm_password = PasswordField(
+        "Confirm new password",
+        validators=[DataRequired(), EqualTo("password", message="Passwords must match.")],
+    )
+    submit = SubmitField("Reset password")

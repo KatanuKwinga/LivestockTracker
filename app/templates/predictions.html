@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Health risk predictions{% endblock %}
+{% block content %}
+<div class="container xwide">
+  <h1>Health risk predictions</h1>
+
+  {% if model_missing %}
+    <div class="flash info">
+      The prediction model hasn't been trained yet. From the project folder, run
+      <code>python -m ml.train</code> (or <code>python -m ml.train --source synthetic</code>
+      if there isn't enough livestock history in the database yet), then reload this page.
+    </div>
+
+  {% elif not rows %}
+    <p class="muted">No living animals are registered on your farm yet, so there's nothing to score.</p>
+
+  {% else %}
+    <p class="muted">
+      Chance each animal falls sick within the next <strong>{{ horizon }} days</strong>, based on its
+      weight trend, age, illness and vaccination history, and the season. On average about
+      {{ "%.0f"|format(base_rate * 100) }}% of animals fall sick in any {{ horizon }}-day window,
+      so a figure well above that is a warning.
+    </p>
+
+    <div class="summary">
+      <div class="tile"><strong>{{ counts["High"] }}</strong><span class="badge high">High risk</span></div>
+      <div class="tile"><strong>{{ counts["Medium"] }}</strong><span class="badge medium">Medium risk</span></div>
+      <div class="tile"><strong>{{ counts["Under treatment"] }}</strong><span class="badge treatment">Under treatment</span></div>
+      <div class="tile"><strong>{{ counts["Low"] }}</strong><span class="badge low">Low risk</span></div>
+    </div>
+
+    <div class="table-scroll">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Animal</th><th>Species / breed</th><th>Age</th>
+            <th>Risk</th><th>Chance</th><th>Key signals</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          {% set band_class = {"High": "high", "Medium": "medium", "Low": "low", "Under treatment": "treatment"}[r.risk_band] %}
+          <tr>
+            <td>#{{ r.animal_id }}</td>
+            <td>{{ r.species|title }}{% if r.breed %} · {{ r.breed }}{% endif %}</td>
+            <td class="num">
+              {% if r.age_days == r.age_days %}{# NaN check: NaN != NaN #}
+                {% if r.age_days >= 365 %}{{ "%.1f"|format(r.age_days / 365) }} yrs{% else %}{{ (r.age_days / 30)|round|int }} mo{% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td><span class="badge {{ band_class }}">{{ r.risk_band }}</span></td>
+            <td class="num">{{ "%.0f"|format(r.probability * 100) }}%</td>
+            <td>
+              {% if r.signals %}
+                <ul>{% for s in r.signals %}<li>{{ s }}</li>{% endfor %}</ul>
+              {% else %}<span class="muted">Nothing unusual in the records</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <p class="muted" style="margin-top: 1.5rem;">
+      Model: {{ model_info.model_name|replace("_", " ") }}, trained {{ model_info.trained_at[:10] }}
+      on {{ model_info.data_source }} data ({{ model_info.n_animals }} animals).
+      Test ROC-AUC {{ "%.2f"|format(model_info.test_metrics.roc_auc) }}.
+      Predictions support, and don't replace, a vet's judgement.
+    </p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,111 +1,69 @@
 # Livestock Data Tracking and Analytics System
 
-A web-based system for tracking livestock (cattle, chicken, goat, sheep) across
-general, health, breeding, production, commercial, and mortality data — with a
-farmer-facing analytics dashboard including a trained regression model for
-disease risk prediction.
+A web-based system for tracking livestock (cattle, chicken, goat, sheep) across general,
+health, breeding, production, commercial and mortality data, with a farmer-facing analytics
+dashboard and a machine-learning model that flags animals at risk of falling sick.
 
-**Stack:** Flask, SQLAlchemy, MySQL, Chart.js, scikit-learn/Pandas/NumPy.
+**Stack:** Flask, SQLAlchemy, MySQL (Aiven cloud), scikit-learn / pandas / NumPy, pytest.
+Chart.js and Bootstrap 5 are planned for the dashboard.
+
+Working on this with Claude Code? Start with `CLAUDE.md`, then `docs/HANDOFF.md`.
 
 ## Project status
 
-- [x] Step 1 — Repo + scaffold + database models
-- [ ] Step 2 — Auth
-- [ ] Step 3 — Worker flows
-- [ ] Step 4 — Farmer flows
-- [ ] Step 5 — Analytics engine
-- [ ] Step 6 — ML pipeline
-- [ ] Step 7 — Predictions + warnings on dashboard
-- [ ] Step 8 — Testing + polish
+- [x] Week 1: scaffold, cloud database, all 10 tables
+- [x] Week 2: authentication (farmer/worker accounts, RBAC, password reset by email)
+- [x] ML pipeline + farmer predictions page (Week 5 work, done early)
+- [ ] Week 3: worker data-entry module
+- [ ] Week 4: analytics dashboard (Chart.js)
+- [ ] Week 5: retrain on real data, predictions on dashboard, write-up
+- [ ] Week 6: testing, security hardening, polish
 
-## Local setup
+Details: `docs/PROJECT_PLAN.md`.
 
-### 1. Prerequisites
-
-- Python 3.11+
-- MySQL running locally (XAMPP is fine — start Apache + MySQL from the control panel)
-
-### 2. Create a virtual environment
+## Local setup (Windows / Git Bash)
 
 ```bash
 python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+source venv/Scripts/activate          # macOS/Linux: source venv/bin/activate
+python -m pip install -r requirements.txt
+cp .env.example .env                  # then fill in SECRET_KEY, DATABASE_URL, MAIL_* values
 ```
 
-### 3. Set up the database
-
-In phpMyAdmin (or the MySQL CLI), create an empty database:
-
-```sql
-CREATE DATABASE livestock_tracker;
-```
-
-Copy the environment file and adjust if your MySQL credentials differ from
-XAMPP's defaults:
+`DATABASE_URL` points at the Aiven MySQL database (the brief requires a non-local database),
+e.g. `mysql+pymysql://avnadmin:<password>@<host>:17717/defaultdb`.
 
 ```bash
-cp .env.example .env
+flask db upgrade        # create/update tables
+pytest -v               # all tests run on in-memory SQLite, no network needed
+python run.py           # http://localhost:5000
 ```
 
-### 4. Verify the models before anything else
+## Machine learning
 
 ```bash
-pytest tests/test_models_load.py -v
+python -m ml.seed --farmer-email demo@example.com   # load a year of simulated animals
+python -m ml.train                                  # train + evaluate + save the model
 ```
 
-This runs against an in-memory SQLite database, not your real MySQL — it's
-just checking that every model imports and every table can be created. If
-this fails, nothing past this point will work, so fix it here first.
-
-### 5. Create the real tables in MySQL
-
-```bash
-flask db init
-flask db migrate -m "initial schema"
-flask db upgrade
-```
-
-Open phpMyAdmin and confirm all 10 tables appeared under `livestock_tracker`.
-
-### 6. Run the app
-
-```bash
-python run.py
-```
-
-Visit `http://localhost:5000/health` — you should see `{"status": "ok"}`.
-That route is a temporary placeholder; it'll be replaced by the real login
-page in Step 2.
+Then log in as that farmer and open **Health risk predictions**. See `ml/__init__.py` for how
+the pipeline fits together and `docs/HANDOFF.md` §3 for the method and results.
 
 ## Project structure
 
 ```
-app/
-  __init__.py          app factory
-  config.py            reads .env
-  extensions.py         shared db/migrate/login_manager/bcrypt instances
-  models/               one file per table, matches Database_schema.drawio
-  routes/                blueprints (empty for now — built step by step)
-  templates/             Jinja2 templates
-  static/                CSS/JS
-ml/                      training scripts + saved model artifacts (Step 6)
-tests/
-run.py                   entry point
+app/            Flask app: config, models (one file per table), routes, forms, templates, CSS
+ml/             synthetic data, feature engineering, training, prediction, DB seeding
+tests/          pytest suite (conftest.py builds the app against SQLite)
+docs/           requirements, plan, design summary, handoff notes
+run.py          entry point
 ```
 
 ## Notes on the schema
 
-- `livestock.b_record_id` and `breeding_record.animal_id`/`sire_id` form a
-  **circular foreign key** between the two tables (a livestock row points to
-  the breeding event it was born from; a breeding event points to the dam and
-  sire livestock rows). This is handled with `use_alter=True` on the
-  `b_record_id` column — Alembic creates both tables first, then adds that
-  specific constraint as a separate `ALTER TABLE` step. If a future migration
-  ever fails specifically on this constraint, that's the first place to look.
-- `age` on `Livestock` is **not** a stored column in code, even though it's
-  drawn that way in the ERD — it's computed live from `date_of_birth` via a
-  Python property, so it can never silently go stale.
-- `yield` on `ProductionData` is a reserved Python keyword, so the database
-  column is still named `yield` (matching your diagram) but the Python
+- `livestock.b_record_id` and `breeding_record.animal_id` / `sire_id` form a circular foreign
+  key, handled with `use_alter=True`. If a migration ever fails on that constraint, look there
+  first.
+- `age` on `Livestock` is computed from `date_of_birth`, not stored, so it can't go stale.
+- `yield` is a Python keyword, so the column stays `yield` in the database but the Python
   attribute is `yield_amount`.
