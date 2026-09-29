@@ -7,6 +7,7 @@
   {% if is_farmer %}
     <p class="muted">You're logged in as a farmer. Livestock records, breeding, health and analytics screens are built in the coming weeks.</p>
     <a class="btn" href="{{ url_for('auth.new_worker') }}">Add a worker</a>
+    <a class="btn" href="{{ url_for('main.predictions') }}">Health risk predictions</a>
   {% else %}
     <p class="muted">You're logged in as a worker. Your data-entry screens are built in Week 3.</p>
   {% endif %}
